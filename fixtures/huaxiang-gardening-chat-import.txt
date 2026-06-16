@@ -1,0 +1,320 @@
+{
+  "description": "花香园艺客服质检模拟数据。当前用于本地测试导入、身份匹配、客观指标和 AI 质检流程；后续真实淘宝/微信数据接入后可替换本文件。",
+  "batches": [
+    {
+      "source_system": "taobao",
+      "mode": "fixture",
+      "file_name": "huaxiang-taobao-demo.txt",
+      "company_domain": "flower_gardening",
+      "source_name": "淘宝历史聊天",
+      "messages": [
+        {
+          "source_message_id": "tb_hx_1001_001",
+          "source_chat_id": "tb_chat_hx_1001",
+          "source_sender_id": "tb_customer_garden_0428",
+          "sender_name": "阳台小花园",
+          "time": "2026-06-15 09:02:18+08",
+          "role": "customer",
+          "content": "你们家的朱丽叶月季是几加仑的？阳台半日照可以养吗？"
+        },
+        {
+          "source_message_id": "tb_hx_1001_002",
+          "source_chat_id": "tb_chat_hx_1001",
+          "source_sender_id": "tb_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 09:03:06+08",
+          "role": "service",
+          "content": "您好，当前朱丽叶月季是 2 加仑苗，半日照可以养，但建议每天有 4 小时以上直射光，通风要好。"
+        },
+        {
+          "source_message_id": "tb_hx_1001_003",
+          "source_chat_id": "tb_chat_hx_1001",
+          "source_sender_id": "tb_customer_garden_0428",
+          "sender_name": "阳台小花园",
+          "time": "2026-06-15 09:04:22+08",
+          "role": "customer",
+          "content": "新手会不会养死？到货以后要不要马上换盆？"
+        },
+        {
+          "source_message_id": "tb_hx_1001_004",
+          "source_chat_id": "tb_chat_hx_1001",
+          "source_sender_id": "tb_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 09:05:19+08",
+          "role": "service",
+          "content": "新手可以养。到货先缓苗 3 到 5 天，不建议马上换盆，先放散射光通风处，盆土见干见湿。"
+        },
+        {
+          "source_message_id": "tb_hx_1001_005",
+          "source_chat_id": "tb_chat_hx_1001",
+          "source_sender_id": "tb_customer_garden_0428",
+          "sender_name": "阳台小花园",
+          "time": "2026-06-15 09:07:43+08",
+          "role": "customer",
+          "content": "我想再看看绣球，后面加微信群有人指导吗？"
+        },
+        {
+          "source_message_id": "tb_hx_1001_006",
+          "source_chat_id": "tb_chat_hx_1001",
+          "source_sender_id": "tb_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 09:08:31+08",
+          "role": "service",
+          "content": "可以的，下单后可进养护群，群里有园艺老师协助看苗和答疑。"
+        },
+        {
+          "source_message_id": "tb_hx_1002_001",
+          "source_chat_id": "tb_chat_hx_1002",
+          "source_sender_id": "tb_customer_moli_527",
+          "sender_name": "南窗茉莉",
+          "time": "2026-06-15 10:18:05+08",
+          "role": "customer",
+          "content": "栀子花收到会不会有黄叶？我之前买别家的到家就蔫了。"
+        },
+        {
+          "source_message_id": "tb_hx_1002_002",
+          "source_chat_id": "tb_chat_hx_1002",
+          "source_sender_id": "tb_staff_xiaochen",
+          "sender_name": "花香客服小陈",
+          "time": "2026-06-15 10:20:45+08",
+          "role": "service",
+          "content": "运输后个别老叶发黄属于缓苗反应，我们会发养护卡。收到后先不要暴晒，保持通风，盆土微潮即可。"
+        },
+        {
+          "source_message_id": "tb_hx_1002_003",
+          "source_chat_id": "tb_chat_hx_1002",
+          "source_sender_id": "tb_customer_moli_527",
+          "sender_name": "南窗茉莉",
+          "time": "2026-06-15 10:21:16+08",
+          "role": "customer",
+          "content": "如果收到状态不好，售后怎么处理？"
+        },
+        {
+          "source_message_id": "tb_hx_1002_004",
+          "source_chat_id": "tb_chat_hx_1002",
+          "source_sender_id": "tb_staff_xiaochen",
+          "sender_name": "花香客服小陈",
+          "time": "2026-06-15 10:24:58+08",
+          "role": "service",
+          "content": "您签收当天拍外箱、整体苗情和问题细节发给我们，售后老师会按实际状态处理。"
+        },
+        {
+          "source_message_id": "tb_hx_1003_001",
+          "source_chat_id": "tb_chat_hx_1003",
+          "source_sender_id": "tb_customer_rosecity",
+          "sender_name": "RoseCity",
+          "time": "2026-06-15 13:12:09+08",
+          "role": "customer",
+          "content": "我想做一个 6 平米露台，月季、绣球、铁线莲能一起配吗？"
+        },
+        {
+          "source_message_id": "tb_hx_1003_002",
+          "source_chat_id": "tb_chat_hx_1003",
+          "source_sender_id": "tb_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 13:13:02+08",
+          "role": "service",
+          "content": "可以搭配，但要看露台朝向、光照时长和是否有遮阴。月季更需要日照，绣球夏天需要适当遮阴。"
+        },
+        {
+          "source_message_id": "tb_hx_1003_003",
+          "source_chat_id": "tb_chat_hx_1003",
+          "source_sender_id": "tb_customer_rosecity",
+          "sender_name": "RoseCity",
+          "time": "2026-06-15 13:14:27+08",
+          "role": "customer",
+          "content": "预算大概 800，想要开花多一点，不知道怎么选。"
+        },
+        {
+          "source_message_id": "tb_hx_1003_004",
+          "source_chat_id": "tb_chat_hx_1003",
+          "source_sender_id": "tb_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 13:15:48+08",
+          "role": "service",
+          "content": "可以先按 3 盆月季、2 盆绣球、1 盆铁线莲做基础组合。您方便加微信进方案群吗？老师可以按现场照片给建议。"
+        }
+      ]
+    },
+    {
+      "source_system": "wechat",
+      "mode": "fixture",
+      "file_name": "huaxiang-wechat-demo.txt",
+      "company_domain": "flower_gardening",
+      "source_name": "微信养护群聊天",
+      "messages": [
+        {
+          "source_message_id": "wx_hx_9001_001",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 09:32:11+08",
+          "role": "service",
+          "content": "欢迎进群，麻烦您发一下淘宝 ID，我这边帮您和淘宝咨询记录匹配。"
+        },
+        {
+          "source_message_id": "wx_hx_9001_002",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_customer_a128",
+          "sender_name": "张女士",
+          "time": "2026-06-15 09:32:48+08",
+          "role": "customer",
+          "content": "淘宝 ID 是 garden_0428，刚才问朱丽叶月季和绣球的。"
+        },
+        {
+          "source_message_id": "wx_hx_9001_003",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 09:33:20+08",
+          "role": "service",
+          "content": "收到，已经匹配到淘宝咨询记录。您的阳台半日照，优先选耐热、抗病性好的品种。"
+        },
+        {
+          "source_message_id": "wx_hx_9001_004",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_customer_a128",
+          "sender_name": "张女士",
+          "time": "2026-06-15 09:35:06+08",
+          "role": "customer",
+          "content": "朱丽叶会不会一年只开一次？我想要复花勤快一点。"
+        },
+        {
+          "source_message_id": "wx_hx_9001_005",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_gardener_alan",
+          "sender_name": "园艺顾问阿岚",
+          "time": "2026-06-15 09:36:02+08",
+          "role": "service",
+          "content": "朱丽叶有复花能力，但阳台环境会影响开花频率。想要复花更勤，可以搭配果汁阳台或铃之妖精这类阳台月季。"
+        },
+        {
+          "source_message_id": "wx_hx_9001_006",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_customer_a128",
+          "sender_name": "张女士",
+          "time": "2026-06-15 09:38:14+08",
+          "role": "customer",
+          "content": "那我先选两盆月季一盆绣球吧，价格有没有套餐？"
+        },
+        {
+          "source_message_id": "wx_hx_9001_007",
+          "source_chat_id": "wx_group_hx_9001",
+          "source_sender_id": "wx_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 09:39:10+08",
+          "role": "sales",
+          "content": "可以给您做 2 盆月季加 1 盆绣球的组合价，我先按当前库存给您列一个清单。"
+        },
+        {
+          "source_message_id": "wx_hx_9002_001",
+          "source_chat_id": "wx_group_hx_9002",
+          "source_sender_id": "wx_staff_xiaochen",
+          "sender_name": "花香客服小陈",
+          "time": "2026-06-15 10:48:22+08",
+          "role": "service",
+          "content": "您好，麻烦发一下淘宝 ID 或订单尾号，我帮您关联售前聊天记录。"
+        },
+        {
+          "source_message_id": "wx_hx_9002_002",
+          "source_chat_id": "wx_group_hx_9002",
+          "source_sender_id": "wx_customer_b530",
+          "sender_name": "李先生",
+          "time": "2026-06-15 10:49:03+08",
+          "role": "customer",
+          "content": "淘宝叫南窗茉莉，还没下单，主要担心栀子花到货黄叶。"
+        },
+        {
+          "source_message_id": "wx_hx_9002_003",
+          "source_chat_id": "wx_group_hx_9002",
+          "source_sender_id": "wx_after_sales_ming",
+          "sender_name": "售后老师明明",
+          "time": "2026-06-15 10:51:31+08",
+          "role": "after_sales",
+          "content": "栀子花运输后轻微黄叶可以先缓苗观察。严重折断、脱盆、明显缺水萎蔫，需要签收当天拍照反馈。"
+        },
+        {
+          "source_message_id": "wx_hx_9002_004",
+          "source_chat_id": "wx_group_hx_9002",
+          "source_sender_id": "wx_customer_b530",
+          "sender_name": "李先生",
+          "time": "2026-06-15 10:54:12+08",
+          "role": "customer",
+          "content": "如果缓苗后还是不行，是退还是补？"
+        },
+        {
+          "source_message_id": "wx_hx_9002_005",
+          "source_chat_id": "wx_group_hx_9002",
+          "source_sender_id": "wx_after_sales_ming",
+          "sender_name": "售后老师明明",
+          "time": "2026-06-15 10:56:45+08",
+          "role": "after_sales",
+          "content": "要结合照片和养护过程判断，我们会先指导调整光照、浇水和通风，符合售后标准的再按规则处理。"
+        },
+        {
+          "source_message_id": "wx_hx_9002_006",
+          "source_chat_id": "wx_group_hx_9002",
+          "source_sender_id": "wx_customer_b530",
+          "sender_name": "李先生",
+          "time": "2026-06-15 10:58:02+08",
+          "role": "customer",
+          "content": "那我再考虑一下，怕家里光照不够。"
+        },
+        {
+          "source_message_id": "wx_hx_9003_001",
+          "source_chat_id": "wx_group_hx_9003",
+          "source_sender_id": "wx_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 13:28:36+08",
+          "role": "service",
+          "content": "欢迎 RoseCity 进群，方便发一下淘宝 ID 吗？我帮您接上露台方案咨询记录。"
+        },
+        {
+          "source_message_id": "wx_hx_9003_002",
+          "source_chat_id": "wx_group_hx_9003",
+          "source_sender_id": "wx_customer_c901",
+          "sender_name": "王女士",
+          "time": "2026-06-15 13:29:15+08",
+          "role": "customer",
+          "content": "淘宝就是 RoseCity，6 平米露台，预算 800 左右。"
+        },
+        {
+          "source_message_id": "wx_hx_9003_003",
+          "source_chat_id": "wx_group_hx_9003",
+          "source_sender_id": "wx_gardener_alan",
+          "sender_name": "园艺顾问阿岚",
+          "time": "2026-06-15 13:31:06+08",
+          "role": "service",
+          "content": "先确认两个信息：露台朝向是南向还是东西向？夏天有没有遮阳网？这会影响月季和绣球比例。"
+        },
+        {
+          "source_message_id": "wx_hx_9003_004",
+          "source_chat_id": "wx_group_hx_9003",
+          "source_sender_id": "wx_customer_c901",
+          "sender_name": "王女士",
+          "time": "2026-06-15 13:34:55+08",
+          "role": "customer",
+          "content": "南向，夏天很晒，目前没有遮阳网。我想开花多，但是不要太难打理。"
+        },
+        {
+          "source_message_id": "wx_hx_9003_005",
+          "source_chat_id": "wx_group_hx_9003",
+          "source_sender_id": "wx_gardener_alan",
+          "sender_name": "园艺顾问阿岚",
+          "time": "2026-06-15 13:36:22+08",
+          "role": "service",
+          "content": "南向露台可以月季为主，绣球建议放在能遮阴的位置。先不要配太多高维护品种，避免夏天管理压力过大。"
+        },
+        {
+          "source_message_id": "wx_hx_9003_006",
+          "source_chat_id": "wx_group_hx_9003",
+          "source_sender_id": "wx_staff_xiaolin",
+          "sender_name": "花香客服小林",
+          "time": "2026-06-15 13:37:40+08",
+          "role": "sales",
+          "content": "我按预算给您整理一个低维护组合，包含品种、盆器建议和后期养护重点，您确认后再决定是否下单。"
+        }
+      ]
+    }
+  ]
+}

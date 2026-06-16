@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: quality-inspection-postgres
+    environment:
+      POSTGRES_DB: quality_inspection
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgresql/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ./database/postgresql/002_seed_demo.sql:/docker-entrypoint-initdb.d/002_seed_demo.sql:ro
+
+volumes:
+  postgres_data:

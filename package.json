@@ -1,0 +1,21 @@
+{
+  "name": "quality-inspection-system",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "backend": "node backend/src/server.js",
+    "frontend": "node frontend/server.js",
+    "data:import-demo": "node scripts/import-fixture.mjs",
+    "db:init": "powershell -ExecutionPolicy Bypass -File scripts/db-init.ps1",
+    "db:start": "powershell -ExecutionPolicy Bypass -File scripts/db-start.ps1",
+    "db:stop": "powershell -ExecutionPolicy Bypass -File scripts/db-stop.ps1",
+    "db:status": "powershell -ExecutionPolicy Bypass -File scripts/db-status.ps1",
+    "db:tables": "powershell -ExecutionPolicy Bypass -File scripts/db-tables.ps1"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
