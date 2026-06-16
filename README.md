@@ -141,6 +141,7 @@ Password: postgres
 DATA_SOURCE=postgres
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/quality_inspection
 DATABASE_SSL=false
+AUTH_TOKEN_SECRET=请替换成长随机字符串
 ```
 
 如果未来改用云数据库，只需要替换 `DATABASE_URL`。
@@ -184,3 +185,9 @@ AI 质检会按登录角色分流：
 - 超级管理员：AI 质检分析，包含客服语义评分、客户意向、合规风险和证据扣分。
 - 质检员：复核版分析，只看需要人工确认的质检项和简化客户信号。
 - 客服：复盘版分析，只看本人改进建议、跟进动作和风险提醒。
+
+## 商业化推进状态
+
+当前已完成第一步商业化地基：后端会在登录后签发 bearer token，业务接口会校验 token 并按角色限制访问。前端会保存 token 并随请求发送，后端以 token 中的角色为准，不再信任前端传入的角色。
+
+生产环境必须设置 `AUTH_TOKEN_SECRET`，并使用足够长的随机字符串。当前仍需继续补齐密码哈希、后端数据范围过滤、审计日志、AI 结果落库、身份复核持久化和自动化测试。

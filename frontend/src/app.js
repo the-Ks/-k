@@ -97,9 +97,9 @@ function readSession() {
 }
 
 function saveSession(value) {
-  const user = normalizeUserSession(value);
-  if (user) {
-    localStorage.setItem(sessionKey, JSON.stringify(user));
+  const session = normalizeSession(value);
+  if (session.user) {
+    localStorage.setItem(sessionKey, JSON.stringify(session));
   }
 }
 
@@ -123,6 +123,13 @@ function normalizeUserSession(value) {
   const user = value?.user || value;
   if (!user || !user.name || !user.role) return null;
   return user;
+}
+
+function normalizeSession(value) {
+  return {
+    user: normalizeUserSession(value),
+    token: value?.token || ""
+  };
 }
 
 function delay(ms) {
@@ -174,17 +181,19 @@ async function loadDemoUsers() {
 
 async function loadData() {
   const role = state.user?.role || "quality_user";
+  const canAdmin = role === "super_admin";
+  const canQuality = role === "super_admin" || role === "quality_user";
   const payload = await Promise.all([
     getOverview(role),
-    getSyncStatus(),
+    canAdmin ? getSyncStatus() : Promise.resolve(null),
     getMessages(),
-    getIdentityReviewTasks(),
+    canQuality ? getIdentityReviewTasks() : Promise.resolve([]),
     getConversations(),
-    getQualityResults(),
+    canQuality ? getQualityResults() : Promise.resolve([]),
     getCustomerProfiles(),
-    getPermissionModel(),
-    getRuleConfig(),
-    getBiDashboard()
+    canAdmin ? getPermissionModel() : Promise.resolve({ roles: [], permissions: [], accounts: [] }),
+    canAdmin ? getRuleConfig() : Promise.resolve(null),
+    canQuality ? getBiDashboard() : Promise.resolve(null)
   ]);
 
   [
@@ -289,7 +298,7 @@ async function onLoginSubmit(event) {
   }
 
   state.user = result.user;
-  saveSession(result.user);
+  saveSession(result);
   await loadData();
   state.view = getDefaultView(state.user.role);
   state.selectedConversationId = state.data.conversations[0]?.id || null;

@@ -18,9 +18,33 @@ import {
   login,
   createAccountRequest
 } from "./services/dataSource.js";
+import { createAuthToken, getBearerToken, verifyAuthToken } from "./services/authService.js";
 
 const env = globalThis.process?.env || {};
 const PORT = Number(env.PORT || 8787);
+const ALL_ROLES = ["super_admin", "quality_user", "service_user"];
+const accessRules = [
+  { method: "GET", path: "/api/overview", roles: ALL_ROLES },
+  { method: "POST", path: "/api/overview", roles: ALL_ROLES },
+  { method: "GET", path: "/api/sync/status", roles: ["super_admin"] },
+  { method: "GET", path: "/api/messages", roles: ALL_ROLES },
+  { method: "POST", path: "/api/messages/import", roles: ["super_admin"] },
+  { method: "GET", path: "/api/identity/review", roles: ["super_admin", "quality_user"] },
+  { method: "GET", path: "/api/conversations", roles: ALL_ROLES },
+  { method: "GET", path: "/api/quality/results", roles: ["super_admin", "quality_user"] },
+  { method: "POST", path: "/api/quality/ai-evaluate", roles: ALL_ROLES },
+  { method: "GET", path: "/api/customers", roles: ALL_ROLES },
+  { method: "GET", path: "/api/permissions", roles: ["super_admin"] },
+  { method: "POST", path: "/api/accounts/request", roles: ["super_admin"] },
+  { method: "GET", path: "/api/rules", roles: ["super_admin"] },
+  { method: "GET", path: "/api/bi", roles: ["super_admin", "quality_user"] }
+];
+const publicRoutes = new Set([
+  "GET /api/health",
+  "GET /api/database/status",
+  "GET /api/auth/demo-users",
+  "POST /api/auth/login"
+]);
 
 function sendJson(res, statusCode, payload) {
   const body = JSON.stringify(payload, null, 2);
@@ -49,6 +73,45 @@ function parseRole(reqUrl) {
   return reqUrl.searchParams.get("role") || "quality_user";
 }
 
+function authorizeRequest(req, path) {
+  const key = `${req.method} ${path}`;
+  if (publicRoutes.has(key)) {
+    return { ok: true, user: null };
+  }
+
+  const rule = accessRules.find((item) => item.method === req.method && item.path === path);
+  if (!rule) {
+    return { ok: true, user: null };
+  }
+
+  const auth = verifyAuthToken(getBearerToken(req));
+  if (!auth.ok) {
+    return {
+      ok: false,
+      statusCode: 401,
+      payload: {
+        ok: false,
+        code: auth.status,
+        message: auth.message
+      }
+    };
+  }
+
+  if (!rule.roles.includes(auth.user.role)) {
+    return {
+      ok: false,
+      statusCode: 403,
+      payload: {
+        ok: false,
+        code: "forbidden",
+        message: "当前账号没有访问该接口的权限。"
+      }
+    };
+  }
+
+  return { ok: true, user: auth.user };
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     return sendJson(res, 204, {});
@@ -58,6 +121,12 @@ const server = http.createServer(async (req, res) => {
   const path = reqUrl.pathname;
 
   try {
+    const access = authorizeRequest(req, path);
+    if (!access.ok) {
+      return sendJson(res, access.statusCode, access.payload);
+    }
+    const currentUser = access.user;
+
     if (req.method === "GET" && path === "/api/health") {
       const databaseStatus = await getDatabaseConnectionStatus();
       return sendJson(res, 200, {
@@ -79,16 +148,19 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && path === "/api/auth/login") {
       const body = await readJson(req);
       const result = await login(body.username, body.password);
+      if (result.ok && result.user) {
+        result.token = createAuthToken(result.user);
+      }
       return sendJson(res, result.ok ? 200 : 401, result);
     }
 
     if (req.method === "GET" && path === "/api/overview") {
-      return sendJson(res, 200, await getOverview(parseRole(reqUrl)));
+      return sendJson(res, 200, await getOverview(currentUser?.role || parseRole(reqUrl)));
     }
 
     if (req.method === "POST" && path === "/api/overview") {
-      const body = await readJson(req);
-      return sendJson(res, 200, await getOverview(body.role || "quality_user"));
+      await readJson(req);
+      return sendJson(res, 200, await getOverview(currentUser?.role || "quality_user"));
     }
 
     if (req.method === "GET" && path === "/api/sync/status") {
@@ -118,7 +190,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && path === "/api/quality/ai-evaluate") {
       const body = await readJson(req);
-      return sendJson(res, 200, await evaluateQualityWithAi(body));
+      return sendJson(res, 200, await evaluateQualityWithAi({
+        ...body,
+        viewer_role: currentUser?.role || "quality_user"
+      }));
     }
 
     if (req.method === "GET" && path === "/api/customers") {

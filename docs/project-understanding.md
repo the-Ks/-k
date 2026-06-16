@@ -20,6 +20,7 @@
 ```text
 backend/                    Node ESM 原生 HTTP API
   src/server.js              API 路由入口
+  src/services/authService.js bearer token 签发与校验
   src/services/dataSource.js mock/PostgreSQL 分流门面
   src/services/postgres*.js  PostgreSQL 连接、查询、导入、映射
   src/services/*Matcher.js   身份匹配、指标计算、BI 分类
@@ -62,7 +63,8 @@ flowchart LR
 
 | 层 | 关键文件 | 职责 |
 | --- | --- | --- |
-| 启动与路由 | `backend/src/server.js` | CORS、JSON 响应、API 路由分派 |
+| 启动与路由 | `backend/src/server.js` | CORS、JSON 响应、API 路由分派、角色级接口授权 |
+| 认证服务 | `backend/src/services/authService.js` | HMAC bearer token 签发、校验、过期判断 |
 | 数据源门面 | `backend/src/services/dataSource.js` | 判断 PostgreSQL 是否配置，失败时回退 mock |
 | 数据库适配 | `backend/src/services/postgresClient.js`, `postgresDataSource.js` | 连接池、SQL 查询、行到 API DTO 映射、消息导入 |
 | 业务规则服务 | `messageImportNormalizer.js`, `identityMatcher.js`, `objectiveMetrics.js`, `biClassifier.js` | 导入校验、身份线索、客观指标、问题分类 |
@@ -81,7 +83,8 @@ flowchart LR
 
 ## 7. 关键模块解释
 
-- `server.js`：无框架 HTTP API。所有接口集中在一个文件中，包括健康检查、登录、消息、身份复核、会话、质检、客户、权限、规则和 BI。
+- `server.js`：无框架 HTTP API。所有接口集中在一个文件中，包括健康检查、登录、消息、身份复核、会话、质检、客户、权限、规则和 BI；当前已加入 bearer token 校验与角色级接口授权。
+- `authService.js`：签发和校验 HMAC token，默认 8 小时有效；生产环境必须配置 `AUTH_TOKEN_SECRET`。
 - `dataSource.js`：系统门面。`fromPostgres()` 在没有配置数据库时走 mock；数据库查询报错时也会回退 mock。
 - `postgresDataSource.js`：数据库读写核心。这里承载登录、消息查询、身份任务生成、会话查询、质检结果重算、账号申请、BI 分类和批量导入。
 - `messageImportNormalizer.js`：导入网关。支持多种字段别名，校验来源、消息 ID、会话 ID、发送人、时间和非文本媒体证据。
@@ -110,6 +113,8 @@ flowchart LR
 - `postgresDataSource.js` 同时负责 SQL、DTO 映射、导入写入和指标组合，属于后端复杂热点。
 - `dataSource.js` 的数据库异常会静默回退 mock，适合演示，但生产环境可能掩盖真实故障。
 - `loginFromPostgres()` 直接比较 `password_hash` 与明文密码，目前只适合 demo，不适合生产。
+- 目前已具备接口级角色授权，但还缺数据范围过滤，例如客服只能看本人客户、质检员只能看授权部门。
+- 商业化路线见 `docs/commercialization-roadmap.md`。
 - `evaluateQualityWithAi()` 当前只返回 AI 结果，尚未写入 `ai_quality_result` 或联动更新 `quality_score`。
 - 身份复核按钮目前主要改前端内存状态，未看到持久化复核 API。
 - 部分文档仍写“占位/mock API”，但运行态已接入 PostgreSQL，文档需要同步更新口径。

@@ -58,6 +58,7 @@ function loginFromMock(username, password) {
 
 export async function getOverview(role) {
   if (role === "super_admin") return overview.superAdmin;
+  if (role === "service_user") return overview.serviceUser;
   return overview.qualityUser;
 }
 

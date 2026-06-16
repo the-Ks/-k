@@ -1,25 +1,36 @@
 import { mockRequest } from "./mock.js";
 
 const API_BASE = localStorage.getItem("qi_api_base") || "http://localhost:8787/api";
+const sessionKey = "qi_session";
 
 async function request(path, options = {}) {
+  const token = getAuthToken();
   const config = {
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     },
     ...options
   };
 
+  let response;
   try {
-    const response = await fetch(`${API_BASE}${path}`, config);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    return await response.json();
+    response = await fetch(`${API_BASE}${path}`, config);
   } catch (error) {
     return mockRequest(path, config);
   }
+
+  const payload = await safeJson(response);
+  if (!response.ok) {
+    return payload || {
+      ok: false,
+      statusCode: response.status,
+      message: `HTTP ${response.status}`
+    };
+  }
+
+  return payload;
 }
 
 export function login(username, password) {
@@ -92,6 +103,25 @@ export async function getBiDashboard() {
 
 export function setApiBase(url) {
   localStorage.setItem("qi_api_base", url);
+}
+
+function getAuthToken() {
+  try {
+    const raw = localStorage.getItem(sessionKey);
+    if (!raw) return "";
+    const session = JSON.parse(raw);
+    return session?.token || "";
+  } catch {
+    return "";
+  }
+}
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 function normalizeBiDashboard(payload) {
