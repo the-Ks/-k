@@ -27,7 +27,7 @@ POST /api/quality/ai-evaluate
 }
 ```
 
-后端根据 `viewer_role` 选择 prompt，不允许前端直接拼接 AI 密钥或直接调用 DeepSeek。
+后端根据 `viewer_role` 选择 prompt，不允许前端直接拼接 AI 密钥或直接调用任何外部 AI Provider。DeepSeek 仅作为当前测试 provider。
 
 ## AI 输入
 

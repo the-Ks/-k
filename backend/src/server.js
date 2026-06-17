@@ -1,10 +1,13 @@
 import http from "node:http";
 import { URL } from "node:url";
 import {
+  adjustQualityScore,
   getBiDashboard,
   getConversations,
   getCustomerProfiles,
   getDemoUsers,
+  getAccountRequests,
+  getOperationLogs,
   evaluateQualityWithAi,
   getIdentityReviewTasks,
   getMessages,
@@ -16,28 +19,41 @@ import {
   getDatabaseConnectionStatus,
   importMessages,
   login,
+  approveAccountRequest,
+  rejectAccountRequest,
+  updateMessageMediaEvidence,
+  updateAccountPermission,
   createAccountRequest
 } from "./services/dataSource.js";
 import { createAuthToken, getBearerToken, verifyAuthToken } from "./services/authService.js";
 
 const env = globalThis.process?.env || {};
 const PORT = Number(env.PORT || 8787);
-const ALL_ROLES = ["super_admin", "quality_user", "service_user"];
+const CORS_ORIGIN = env.CORS_ORIGIN || "*";
+const QUALITY_ROLES = ["super_admin", "quality_manager", "quality_user"];
+const ALL_ROLES = [...QUALITY_ROLES, "service_user"];
 const accessRules = [
   { method: "GET", path: "/api/overview", roles: ALL_ROLES },
   { method: "POST", path: "/api/overview", roles: ALL_ROLES },
   { method: "GET", path: "/api/sync/status", roles: ["super_admin"] },
   { method: "GET", path: "/api/messages", roles: ALL_ROLES },
   { method: "POST", path: "/api/messages/import", roles: ["super_admin"] },
-  { method: "GET", path: "/api/identity/review", roles: ["super_admin", "quality_user"] },
+  { method: "POST", path: "/api/messages/media-evidence", roles: QUALITY_ROLES },
+  { method: "GET", path: "/api/identity/review", roles: QUALITY_ROLES },
   { method: "GET", path: "/api/conversations", roles: ALL_ROLES },
-  { method: "GET", path: "/api/quality/results", roles: ["super_admin", "quality_user"] },
+  { method: "GET", path: "/api/quality/results", roles: ALL_ROLES },
   { method: "POST", path: "/api/quality/ai-evaluate", roles: ALL_ROLES },
+  { method: "POST", path: "/api/quality/score-adjust", roles: QUALITY_ROLES },
   { method: "GET", path: "/api/customers", roles: ALL_ROLES },
   { method: "GET", path: "/api/permissions", roles: ["super_admin"] },
+  { method: "POST", path: "/api/permissions/account-update", roles: ["super_admin"] },
   { method: "POST", path: "/api/accounts/request", roles: ["super_admin"] },
+  { method: "GET", path: "/api/accounts/requests", roles: ["super_admin"] },
+  { method: "POST", path: "/api/accounts/request-approve", roles: ["super_admin"] },
+  { method: "POST", path: "/api/accounts/request-reject", roles: ["super_admin"] },
+  { method: "GET", path: "/api/operations/logs", roles: ["super_admin"] },
   { method: "GET", path: "/api/rules", roles: ["super_admin"] },
-  { method: "GET", path: "/api/bi", roles: ["super_admin", "quality_user"] }
+  { method: "GET", path: "/api/bi", roles: QUALITY_ROLES }
 ];
 const publicRoutes = new Set([
   "GET /api/health",
@@ -49,7 +65,7 @@ const publicRoutes = new Set([
 function sendJson(res, statusCode, payload) {
   const body = JSON.stringify(payload, null, 2);
   res.writeHead(statusCode, {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": CORS_ORIGIN,
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Content-Type": "application/json; charset=utf-8",
@@ -168,7 +184,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && path === "/api/messages") {
-      return sendJson(res, 200, await getMessages(reqUrl.searchParams));
+      return sendJson(res, 200, await getMessages(reqUrl.searchParams, currentUser));
     }
 
     if (req.method === "POST" && path === "/api/messages/import") {
@@ -176,37 +192,73 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await importMessages(body));
     }
 
+    if (req.method === "POST" && path === "/api/messages/media-evidence") {
+      const body = await readJson(req);
+      return sendJson(res, 200, await updateMessageMediaEvidence(body, currentUser));
+    }
+
     if (req.method === "GET" && path === "/api/identity/review") {
       return sendJson(res, 200, await getIdentityReviewTasks());
     }
 
     if (req.method === "GET" && path === "/api/conversations") {
-      return sendJson(res, 200, await getConversations());
+      return sendJson(res, 200, await getConversations(currentUser));
     }
 
     if (req.method === "GET" && path === "/api/quality/results") {
-      return sendJson(res, 200, await getQualityResults());
+      return sendJson(res, 200, await getQualityResults(currentUser));
     }
 
     if (req.method === "POST" && path === "/api/quality/ai-evaluate") {
       const body = await readJson(req);
       return sendJson(res, 200, await evaluateQualityWithAi({
         ...body,
-        viewer_role: currentUser?.role || "quality_user"
+        viewer_role: currentUser?.role || "quality_user",
+        viewer_user_id: currentUser?.id || "",
+        viewer_data_scope: currentUser?.dataScope || ""
       }));
     }
 
+    if (req.method === "POST" && path === "/api/quality/score-adjust") {
+      const body = await readJson(req);
+      return sendJson(res, 200, await adjustQualityScore(body, currentUser));
+    }
+
     if (req.method === "GET" && path === "/api/customers") {
-      return sendJson(res, 200, await getCustomerProfiles());
+      return sendJson(res, 200, await getCustomerProfiles(currentUser));
     }
 
     if (req.method === "GET" && path === "/api/permissions") {
       return sendJson(res, 200, await getPermissionModel());
     }
 
+    if (req.method === "POST" && path === "/api/permissions/account-update") {
+      const body = await readJson(req);
+      return sendJson(res, 200, await updateAccountPermission(body, currentUser));
+    }
+
     if (req.method === "POST" && path === "/api/accounts/request") {
       const body = await readJson(req);
-      return sendJson(res, 200, await createAccountRequest(body));
+      return sendJson(res, 200, await createAccountRequest(body, currentUser));
+    }
+
+    if (req.method === "GET" && path === "/api/accounts/requests") {
+      return sendJson(res, 200, await getAccountRequests());
+    }
+
+    if (req.method === "POST" && path === "/api/accounts/request-approve") {
+      const body = await readJson(req);
+      return sendJson(res, 200, await approveAccountRequest(body, currentUser));
+    }
+
+    if (req.method === "POST" && path === "/api/accounts/request-reject") {
+      const body = await readJson(req);
+      return sendJson(res, 200, await rejectAccountRequest(body, currentUser));
+    }
+
+    if (req.method === "GET" && path === "/api/operations/logs") {
+      const limit = Number(reqUrl.searchParams.get("limit") || 30);
+      return sendJson(res, 200, await getOperationLogs(limit));
     }
 
     if (req.method === "GET" && path === "/api/rules") {

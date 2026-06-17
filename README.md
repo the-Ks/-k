@@ -4,11 +4,42 @@
 
 ## 目录
 
-- `backend/`：Node 原生 HTTP 占位 API
+- `backend/`：Node 原生 HTTP API 服务
 - `frontend/`：原生 HTML/CSS/JS 的管理台原型
-- `docs/`：项目流程和接口占位说明
+- `docs/`：项目流程和接口说明
 
 ## 运行
+
+### 新电脑拉取后运行
+
+```bash
+git clone https://github.com/the-Ks/-k.git
+cd -k
+npm install
+npm test
+npm run backend
+npm run frontend
+```
+
+默认不要求先安装数据库；未配置 PostgreSQL 时，后端使用项目内 mock 数据，适合快速预览和验收界面。
+
+如果要使用本地 PostgreSQL 运行真实数据库链路：
+
+1. 复制 `backend/.env.example` 为 `backend/.env.local`。
+2. 设置 `DATA_SOURCE=postgres`、`DATABASE_URL=postgres://postgres:postgres@localhost:5432/quality_inspection`。
+3. 启动或准备 PostgreSQL 后执行：
+
+```bash
+npm run db:migrate:seed
+npm run backend
+npm run frontend
+```
+
+Windows 本地开发也可以直接运行：
+
+```bash
+npm run start:dev
+```
 
 第一次启动建议在项目根目录按这个顺序：
 
@@ -49,6 +80,7 @@ npm run db:stop
 ```
 
 页面会优先请求后端接口，失败则自动回退到 mock 数据。
+当 `DATA_SOURCE=postgres` 时，数据库查询异常默认不会静默回退到 mock；只有显式设置 `ALLOW_MOCK_FALLBACK=true` 才允许演示环境回退。
 
 如果只想分别启动前后端：
 
@@ -146,10 +178,10 @@ AUTH_TOKEN_SECRET=请替换成长随机字符串
 
 如果未来改用云数据库，只需要替换 `DATABASE_URL`。
 
-前端默认请求 `http://localhost:8787/api`。如果后端部署在另一台机器或其他端口，可以在浏览器控制台设置：
+前端浏览器端默认请求同源 `/api`，不在页面代码里绑定本机地址。开发服务器会把 `/api` 转发给后端；如果后端部署在另一台机器或其他端口，启动前端服务时配置 `QI_API_ORIGIN` 或 `API_ORIGIN`：
 
-```js
-localStorage.setItem("qi_api_base", "http://你的后端地址/api")
+```bash
+QI_API_ORIGIN=https://你的后端地址 npm run frontend
 ```
 
 ## 模拟数据
@@ -168,15 +200,18 @@ npm run data:import-demo
 
 这份文本数据包含淘宝咨询和微信养护群两类来源，覆盖客户自报淘宝 ID、客服接待、园艺顾问答疑、售后说明、购买犹豫和套餐咨询。后续真实数据接入时，保持同样字段结构替换即可。
 
-## DeepSeek AI 质检
+## AI Provider 质检
 
-后端已预留并接入 DeepSeek Chat Completions。复制 `backend/.env.example` 为 `backend/.env.local`，填写：
+后端已接入 OpenAI-compatible 的 AI Provider 调用层。DeepSeek 只是当前测试 provider，商业版可以通过环境变量替换为更强模型，不需要改前端和质检业务流程。复制 `backend/.env.example` 为 `backend/.env.local`，填写：
 
 ```text
-DEEPSEEK_API_KEY=你的 DeepSeek 密钥
-DEEPSEEK_MODEL=deepseek-v4-pro
-DEEPSEEK_BASE_URL=https://api.deepseek.com
+AI_PROVIDER=deepseek
+AI_API_KEY=你的测试或商业 AI 密钥
+AI_MODEL=deepseek-v4-flash
+AI_BASE_URL=https://api.deepseek.com
 ```
+
+兼容旧配置：当前测试环境也可以继续使用 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL`。
 
 然后重启后端，在“质检评分”页点击“运行 AI 质检”。
 
@@ -186,8 +221,18 @@ AI 质检会按登录角色分流：
 - 质检员：复核版分析，只看需要人工确认的质检项和简化客户信号。
 - 客服：复盘版分析，只看本人改进建议、跟进动作和风险提醒。
 
+AI 返回结果会先做基础 schema 校验。结构合格时写入 `ai_quality_result`，保存输入快照、prompt 版本、模型、输出、用量和验证状态；结构不合格时返回 `invalid_ai_result`，只记录失败审计，不更新最终质检分。
+
 ## 商业化推进状态
 
 当前已完成第一步商业化地基：后端会在登录后签发 bearer token，业务接口会校验 token 并按角色限制访问。前端会保存 token 并随请求发送，后端以 token 中的角色为准，不再信任前端传入的角色。
 
-生产环境必须设置 `AUTH_TOKEN_SECRET`，并使用足够长的随机字符串。当前仍需继续补齐密码哈希、后端数据范围过滤、审计日志、AI 结果落库、身份复核持久化和自动化测试。
+生产环境必须设置 `AUTH_TOKEN_SECRET`，并使用足够长的随机字符串。当前已完成演示账号密码哈希、客服本人数据范围、AI 结果落库和基础 schema 校验，仍需继续补齐质检员授权范围、账号禁用/重置、审计日志、身份复核持久化和自动化测试。
+
+## 正式投用任务板
+
+正式投入日常业务前的任务拆分见：
+
+```text
+docs/production-readiness-board.md
+```

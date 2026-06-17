@@ -24,7 +24,7 @@ backend/                    Node ESM 原生 HTTP API
   src/services/dataSource.js mock/PostgreSQL 分流门面
   src/services/postgres*.js  PostgreSQL 连接、查询、导入、映射
   src/services/*Matcher.js   身份匹配、指标计算、BI 分类
-  src/prompts/               DeepSeek 角色化 prompt
+  src/prompts/               AI Provider 角色化 prompt
   src/config/domainProfile.js 花卉园艺业务规则
 
 frontend/                   原生管理台
@@ -50,7 +50,7 @@ flowchart LR
   E --> F["identity_match 人工复核任务"]
   D --> G["conversation / conversation_message"]
   G --> H["objectiveMetrics 客观规则分"]
-  G --> I["DeepSeek AI 语义质检"]
+  G --> I["AI Provider 语义质检"]
   H --> J["quality_score"]
   I --> J
   G --> K["customer_profile"]
@@ -63,34 +63,35 @@ flowchart LR
 
 | 层 | 关键文件 | 职责 |
 | --- | --- | --- |
-| 启动与路由 | `backend/src/server.js` | CORS、JSON 响应、API 路由分派、角色级接口授权 |
+| 启动与路由 | `backend/src/server.js` | CORS、JSON 响应、API 路由分派、角色级接口授权，并把当前登录用户传递给数据源做范围过滤 |
 | 认证服务 | `backend/src/services/authService.js` | HMAC bearer token 签发、校验、过期判断 |
-| 数据源门面 | `backend/src/services/dataSource.js` | 判断 PostgreSQL 是否配置，失败时回退 mock |
-| 数据库适配 | `backend/src/services/postgresClient.js`, `postgresDataSource.js` | 连接池、SQL 查询、行到 API DTO 映射、消息导入 |
+| 数据源门面 | `backend/src/services/dataSource.js` | 判断 PostgreSQL 是否配置，失败时回退 mock；mock 回退也遵守客服本人数据范围 |
+| 数据库适配 | `backend/src/services/postgresClient.js`, `postgresDataSource.js` | 连接池、SQL 查询、行到 API DTO 映射、消息导入、客服本人数据过滤 |
 | 业务规则服务 | `messageImportNormalizer.js`, `identityMatcher.js`, `objectiveMetrics.js`, `biClassifier.js` | 导入校验、身份线索、客观指标、问题分类 |
-| AI 质检 | `aiQualityService.js`, `backend/src/prompts/*` | 读取会话上下文，按角色调用 DeepSeek prompt |
+| AI 质检 | `aiQualityService.js`, `backend/src/prompts/*` | 读取会话上下文，按角色调用可替换 AI Provider prompt |
 | 前端应用 | `frontend/src/app.js`, `frontend/src/api.js`, `frontend/src/mock.js` | 登录、导航、各角色页面、AI 质检展示、mock 回退 |
 | 数据库模型 | `database/postgresql/001_init.sql` | 权限、人员、平台账号、原始消息、身份匹配、会话、质检、客户画像 |
 
 ## 6. 业务领域模型
 
-- 原始事实：`raw_message` 保存淘宝/微信消息，保留来源 ID、发送者、时间、角色、内容、多媒体解析字段和原始 payload。
+- 原始事实：`raw_message` 保存淘宝/微信消息，保留来源 ID、发送者、时间、角色、内容、多媒体解析字段和原始 payload；图片 OCR、语音/视频转写、媒体描述和解析审计信息先写入这里，再进入 AI 质检。
 - 身份统一：`person` 是统一人，`platform_account` 是淘宝/微信账号，`identity_match` 记录匹配证据、置信度和复核状态。
 - 会话链路：`conversation` 聚合客户阶段，`conversation_message` 保留消息顺序，`conversation_participant` 记录参与人。
-- 质检结果：`quality_score` 保存客观分、AI 分、最终分、维度与风险；`ai_quality_result` 预留 AI 结果持久化表。
+- 质检结果：`quality_score` 保存客观分、AI 分、最终分、维度与风险；`ai_quality_result` 保存 AI 输入快照、prompt 版本、模型版本、输出、用量、schema 校验状态和错误信息。
 - 客户画像：`customer_profile` 保存意向、满意度、标签、需求和负责人。
 - 权限：`role`、`permission`、`app_user`、`user_role` 支持角色和数据范围。
 
 ## 7. 关键模块解释
 
-- `server.js`：无框架 HTTP API。所有接口集中在一个文件中，包括健康检查、登录、消息、身份复核、会话、质检、客户、权限、规则和 BI；当前已加入 bearer token 校验与角色级接口授权。
+- `server.js`：无框架 HTTP API。所有接口集中在一个文件中，包括健康检查、登录、消息、身份复核、会话、质检、客户、权限、规则和 BI；当前已加入 bearer token 校验、角色级接口授权，并将 token 中的当前用户传给受控数据查询。
 - `authService.js`：签发和校验 HMAC token，默认 8 小时有效；生产环境必须配置 `AUTH_TOKEN_SECRET`。
-- `dataSource.js`：系统门面。`fromPostgres()` 在没有配置数据库时走 mock；数据库查询报错时也会回退 mock。
-- `postgresDataSource.js`：数据库读写核心。这里承载登录、消息查询、身份任务生成、会话查询、质检结果重算、账号申请、BI 分类和批量导入。
+- `passwordService.js`：使用 PBKDF2-SHA256 哈希和校验密码，避免后端和数据库保存明文密码。
+- `dataSource.js`：系统门面。`fromPostgres()` 在没有配置数据库时走 mock；数据库查询报错时也会回退 mock；客服账号的 mock 回退会按本人会话、客户和复盘过滤。
+- `postgresDataSource.js`：数据库读写核心。这里承载登录、消息查询、身份任务生成、会话查询、质检结果重算、账号申请、BI 分类和批量导入；客服账号的消息、会话、客户画像和质检结果已按 `owner_user_id` 限定。
 - `messageImportNormalizer.js`：导入网关。支持多种字段别名，校验来源、消息 ID、会话 ID、发送人、时间和非文本媒体证据。
 - `identityMatcher.js`：从微信客户消息抽取淘宝 ID，再与淘宝侧昵称、sender_id、chat_id 和园艺主题重合度匹配。
 - `objectiveMetrics.js`：用消息顺序计算首次响应、平均响应、最长等待、超时次数、回复覆盖率、主动跟进和流程分。
-- `aiQualityService.js`：加载 `backend/.env.local`，构造 DeepSeek Chat Completions 请求，按 `viewer_role` 选择 prompt。
+- `aiQualityService.js`：加载 `backend/.env.local`，构造可替换的 Chat Completions 请求，按 `viewer_role` 选择 prompt，并在数据库上下文下把通过/失败的 AI 结果审计写入 `ai_quality_result`。
 - `frontend/src/app.js`：单页管理台的集中控制器，负责角色菜单、数据加载、页面渲染、AI 质检按钮、前端状态和交互事件。
 
 ## 8. 新人上手路径
@@ -105,25 +106,26 @@ flowchart LR
 
 ## 9. 当前 diff / 版本状态
 
-仓库还没有初始提交，`git status` 显示所有项目文件都是 untracked。因此没有可比较的局部 diff，当前影响面等同于“全系统首版”。
+仓库已有初始提交，当前工作区处于持续开发状态，包含多处未提交的产品化改动。因此阅读或提交前需要先看 `git status --short`，区分本次改动与既有改动。
 
 需要重点审查的首版风险：
 
 - `frontend/src/app.js` 超过 100KB，页面、状态、渲染、事件都集中在一个文件，后续维护风险高。
 - `postgresDataSource.js` 同时负责 SQL、DTO 映射、导入写入和指标组合，属于后端复杂热点。
-- `dataSource.js` 的数据库异常会静默回退 mock，适合演示，但生产环境可能掩盖真实故障。
-- `loginFromPostgres()` 直接比较 `password_hash` 与明文密码，目前只适合 demo，不适合生产。
-- 目前已具备接口级角色授权，但还缺数据范围过滤，例如客服只能看本人客户、质检员只能看授权部门。
+- `dataSource.js` 的数据库异常默认不再静默回退 mock；演示环境需要显式设置 `ALLOW_MOCK_FALLBACK=true` 才允许回退。
+- 演示账号已改为 PBKDF2 哈希校验，但还缺账号禁用、密码重置、初始密码变更和登录失败限流。
+- 目前已具备接口级角色授权，并已完成客服本人数据范围过滤；质检员的部门/授权会话范围仍待补齐。
 - 商业化路线见 `docs/commercialization-roadmap.md`。
-- `evaluateQualityWithAi()` 当前只返回 AI 结果，尚未写入 `ai_quality_result` 或联动更新 `quality_score`。
+- `evaluateQualityWithAi()` 当前会校验 AI 输出并写入 `ai_quality_result`；尚未联动更新 `quality_score`，最终质检分仍需要后续人工确认闭环。
 - 身份复核按钮目前主要改前端内存状态，未看到持久化复核 API。
-- 部分文档仍写“占位/mock API”，但运行态已接入 PostgreSQL，文档需要同步更新口径。
+- API 文档已更新为 PostgreSQL 优先、mock 兜底演示的口径；后续新增接口仍需要同步维护。
 
 ## 10. 可继续问答索引
 
 常见追问可以从这些入口开始：
 
 - “消息导入怎么走？”看 `POST /api/messages/import`、`messageImportNormalizer.js`、`postgresDataSource.js#importMessagesInPostgres`。
+- “图片 OCR、语音/视频转写怎么进入质检？”看 `POST /api/messages/media-evidence`、`dataSource.js#updateMessageMediaEvidence`、`postgresDataSource.js#updateMessageMediaEvidenceInPostgres`。
 - “AI 质检为什么不同角色看到不一样？”看 `backend/src/prompts/index.js` 和 `frontend/src/app.js#runAiQualityEvaluation`。
 - “客观分怎么算？”看 `objectiveMetrics.js#computeConversationObjectiveMetrics`。
 - “身份匹配怎么自动生成？”看 `identityMatcher.js#buildIdentityReviewTasksFromMessages`。

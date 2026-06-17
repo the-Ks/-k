@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $InitDb = Resolve-PgTool "initdb"
 $PgCtl = Resolve-PgTool "pg_ctl"
+$PgIsReady = Resolve-PgTool "pg_isready"
 $Createdb = Resolve-PgTool "createdb"
 $Psql = Resolve-PgTool "psql"
 
@@ -17,7 +18,7 @@ if (-not (Test-Path $DataDir)) {
   & $InitDb -D $DataDir -U $PgUser -A scram-sha-256 "--pwfile=$PasswordFile" -E UTF8 --locale=C
 }
 
-& $PgCtl -D $DataDir status | Out-Null
+& $PgIsReady -h $PgHost -p $PgPort -q
 if ($LASTEXITCODE -ne 0) {
   & $PgCtl -D $DataDir -l $InitLogFile -o "-p $PgPort" -w start
 }
@@ -31,5 +32,9 @@ if ($DbExists -ne "1") {
 & $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\001_init.sql")
 & $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\003_message_media.sql")
 & $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\002_seed_demo.sql")
+& $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\004_password_hashes.sql")
+& $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\005_ai_quality_audit_fields.sql")
+& $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\006_operation_log.sql")
+& $Psql -h $PgHost -p $PgPort -U $PgUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $Root "database\postgresql\007_manual_score_adjustment.sql")
 
-Write-Host "Database is ready: postgres://$PgUser:****@${PgHost}:$PgPort/$DbName"
+Write-Host "Database is ready: postgres://${PgUser}:****@${PgHost}:$PgPort/$DbName"

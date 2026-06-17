@@ -1,7 +1,7 @@
 node_modules/
-data/
-tools/postgresql/
-.understand-anything/
+/data/
+/tools/postgresql/
+/.understand-anything/
 .DS_Store
 Thumbs.db
 *.log

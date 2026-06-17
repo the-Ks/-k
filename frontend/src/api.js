@@ -1,7 +1,18 @@
 import { mockRequest } from "./mock.js";
 
-const API_BASE = localStorage.getItem("qi_api_base") || "http://localhost:8787/api";
+const API_BASE = resolveApiBase();
 const sessionKey = "qi_session";
+
+function resolveApiBase() {
+  const configured = globalThis.QI_API_BASE || globalThis.__QI_CONFIG__?.apiBase;
+  if (configured) return normalizeApiBase(configured);
+
+  return "/api";
+}
+
+function normalizeApiBase(value) {
+  return String(value || "/api").replace(/\/+$/, "");
+}
 
 async function request(path, options = {}) {
   const token = getAuthToken();
@@ -78,6 +89,13 @@ export function evaluateQualityWithAi(payload) {
   });
 }
 
+export function adjustQualityScore(payload) {
+  return request("/quality/score-adjust", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getCustomerProfiles() {
   return request("/customers");
 }
@@ -86,11 +104,40 @@ export function getPermissionModel() {
   return request("/permissions");
 }
 
+export function updateAccountPermission(payload) {
+  return request("/permissions/account-update", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function createAccountRequest(payload) {
   return request("/accounts/request", {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export function getAccountRequests() {
+  return request("/accounts/requests");
+}
+
+export function approveAccountRequest(payload) {
+  return request("/accounts/request-approve", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function rejectAccountRequest(payload) {
+  return request("/accounts/request-reject", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getOperationLogs(limit = 30) {
+  return request(`/operations/logs?limit=${encodeURIComponent(limit)}`);
 }
 
 export function getRuleConfig() {
@@ -101,14 +148,10 @@ export async function getBiDashboard() {
   return normalizeBiDashboard(await request("/bi"));
 }
 
-export function setApiBase(url) {
-  localStorage.setItem("qi_api_base", url);
-}
-
 function getAuthToken() {
+  const raw = safeLocalStorageGet(sessionKey);
+  if (!raw) return "";
   try {
-    const raw = localStorage.getItem(sessionKey);
-    if (!raw) return "";
     const session = JSON.parse(raw);
     return session?.token || "";
   } catch {
@@ -145,6 +188,14 @@ function normalizeQuestionTypes(items) {
     count: Number(item.count ?? item.value ?? 0),
     percentage: Number(item.percentage ?? item.value ?? 0)
   }));
+}
+
+function safeLocalStorageGet(key) {
+  try {
+    return typeof localStorage === "undefined" ? "" : localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
 }
 
 function fallbackBiDashboard() {

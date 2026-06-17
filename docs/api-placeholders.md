@@ -1,10 +1,12 @@
-# API 占位说明
+# API 说明
 
-当前项目没有真实数据库接口，后端先提供 mock API。后续接入真实数据时，优先替换：
+当前项目已经具备 PostgreSQL 数据库接口，并保留 mock 数据用于本地演示和离线预览。后端数据入口仍集中在：
 
 ```text
 backend/src/services/dataSource.js
 ```
+
+当未配置 PostgreSQL 时，接口走 mock 数据；当 `DATA_SOURCE=postgres` 或配置了数据库连接时，接口走 PostgreSQL。数据库异常默认返回失败，不再静默回退 mock；演示环境可显式设置 `ALLOW_MOCK_FALLBACK=true`。
 
 ## 当前接口
 
@@ -20,7 +22,8 @@ backend/src/services/dataSource.js
 | GET | `/api/identity/review` | 身份复核任务 |
 | GET | `/api/conversations` | 会话链路 |
 | GET | `/api/quality/results` | 质检结果 |
-| POST | `/api/quality/ai-evaluate` | AI 质检评估，按 `viewer_role` 选择完整质检/质检复核/客服复盘 prompt，后端调用 DeepSeek V4 |
+| POST | `/api/quality/ai-evaluate` | AI 质检评估，按 `viewer_role` 选择完整质检/质检复核/客服复盘 prompt，后端调用可替换 AI Provider；DeepSeek 仅作为当前测试 provider |
+| POST | `/api/messages/media-evidence` | 写入图片 OCR、语音/视频转写、媒体描述和解析审计信息，供 AI 基于文本证据质检 |
 | GET | `/api/customers` | 客户画像 |
 | GET | `/api/permissions` | 权限模型 |
 | POST | `/api/accounts/request` | 新建账号申请，占位等待写入云数据库 |

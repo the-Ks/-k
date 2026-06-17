@@ -12,9 +12,12 @@ import {
   users
 } from "../data/mockData.js";
 import { runAiQualityEvaluation } from "./aiQualityService.js";
+import { hashPassword, verifyPassword } from "./passwordService.js";
 import { getDatabaseStatus, isPostgresConfigured } from "./postgresClient.js";
 import {
+  adjustQualityScoreInPostgres,
   createAccountRequestInPostgres,
+  getAccountRequestsFromPostgres,
   getConversationsFromPostgres,
   getCustomerProfilesFromPostgres,
   getDemoUsersFromPostgres,
@@ -22,33 +25,39 @@ import {
   getBiDashboardFromPostgres,
   getMessagesFromPostgres,
   getPermissionModelFromPostgres,
+  getOperationLogsFromPostgres,
   getQualityResultsFromPostgres,
   getSyncStatusFromPostgres,
   importMessagesInPostgres,
-  loginFromPostgres
+  loginFromPostgres,
+  approveAccountRequestInPostgres,
+  rejectAccountRequestInPostgres,
+  updateAccountPermissionInPostgres,
+  updateMessageMediaEvidenceInPostgres
 } from "./postgresDataSource.js";
 
 const accountRequests = [];
+const operationLogs = [];
 
 export async function getDemoUsers() {
-  return fromPostgres(() => getDemoUsersFromPostgres(), () => users.map(({ password, ...user }) => user));
+  return fromPostgres(() => getDemoUsersFromPostgres(), () => users.map(({ passwordHash, ...user }) => user));
 }
 
 export async function login(username, password) {
   return fromPostgres(() => loginFromPostgres(username, password), () => loginFromMock(username, password));
 }
 
-function loginFromMock(username, password) {
-  const user = users.find((item) => item.username === username && item.password === password);
+async function loginFromMock(username, password) {
+  const user = users.find((item) => item.username === username);
 
-  if (!user) {
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
     return {
       ok: false,
       message: "账号或密码错误"
     };
   }
 
-  const { password: _, ...safeUser } = user;
+  const { passwordHash: _, ...safeUser } = user;
   return {
     ok: true,
     token: `mock-token-${safeUser.id}`,
@@ -66,70 +75,445 @@ export async function getSyncStatus() {
   return fromPostgres(() => getSyncStatusFromPostgres(), () => syncStatus);
 }
 
-export async function getMessages(searchParams = new URLSearchParams()) {
-  return fromPostgres(() => getMessagesFromPostgres(searchParams), () => getMessagesFromMock(searchParams));
+export async function getMessages(searchParams = new URLSearchParams(), currentUser = null) {
+  return fromPostgres(() => getMessagesFromPostgres(searchParams, currentUser), () => getMessagesFromMock(searchParams, currentUser));
 }
 
-function getMessagesFromMock(searchParams = new URLSearchParams()) {
+function getMessagesFromMock(searchParams = new URLSearchParams(), currentUser = null) {
   const platform = searchParams.get("platform");
   const role = searchParams.get("role");
+  const allowedChatIds = getSelfScopedMockChatIds(currentUser);
 
   return messages.filter((item) => {
+    if (allowedChatIds && !allowedChatIds.has(item.sourceChatId)) return false;
     if (platform && platform !== "all" && item.platform !== platform) return false;
     if (role && role !== "all" && item.normalizedRole !== role) return false;
     return true;
   });
 }
 
+function getSelfScopedMockRecords(records, currentUser) {
+  if (!isSelfScopedUser(currentUser)) return records;
+  return records.filter((item) => item.owner === currentUser.name);
+}
+
+function getSelfScopedMockChatIds(currentUser) {
+  if (!isSelfScopedUser(currentUser)) return null;
+
+  const customerIds = new Set(
+    getSelfScopedMockRecords(conversations, currentUser)
+      .map((item) => item.customerId)
+      .filter(Boolean)
+  );
+  if (!customerIds.size) return new Set();
+
+  return new Set(
+    messages
+      .filter((item) => customerIds.has(item.personId))
+      .map((item) => item.sourceChatId)
+      .filter(Boolean)
+  );
+}
+
+function isSelfScopedUser(currentUser) {
+  return Boolean(currentUser?.id) && (currentUser.role === "service_user" || currentUser.dataScope === "self");
+}
+
 export async function getIdentityReviewTasks() {
   return fromPostgres(() => getIdentityReviewTasksFromPostgres(), () => identityReviewTasks);
 }
 
-export async function getConversations() {
-  return fromPostgres(() => getConversationsFromPostgres(), () => conversations);
+export async function getConversations(currentUser = null) {
+  return fromPostgres(() => getConversationsFromPostgres(currentUser), () => getSelfScopedMockRecords(conversations, currentUser));
 }
 
-export async function getQualityResults() {
-  return fromPostgres(() => getQualityResultsFromPostgres(), () => qualityResults);
+export async function getQualityResults(currentUser = null) {
+  if (isPostgresConfigured()) {
+    return getQualityResultsFromPostgres(currentUser);
+  }
+  return getSelfScopedMockRecords(qualityResults, currentUser);
+}
+
+export async function adjustQualityScore(payload = {}, currentUser = null) {
+  return fromPostgres(() => adjustQualityScoreInPostgres(payload, currentUser), () => adjustQualityScoreInMock(payload, currentUser));
+}
+
+function adjustQualityScoreInMock(payload = {}, currentUser = null) {
+  const resultId = String(payload.quality_result_id || payload.qualityResultId || payload.id || "").trim();
+  const conversationId = String(payload.conversation_id || payload.conversationId || "").trim();
+  const score = normalizeManualAiScore(payload.ai_score ?? payload.aiScore);
+  const reason = normalizeManualAdjustReason(payload.reason || payload.adjust_reason || payload.adjustReason || payload.manual_adjust_reason || payload.manualAdjustReason);
+  if (score === null) {
+    return {
+      ok: false,
+      status: "invalid_ai_score",
+      message: "ai_score must be a number between 0 and 60."
+    };
+  }
+
+  if (!reason) {
+    return {
+      ok: false,
+      status: "missing_adjust_reason",
+      message: "请填写人工改分理由，便于后续审计。"
+    };
+  }
+
+  const record = qualityResults.find((item) => resultId ? item.id === resultId : item.conversationId === conversationId);
+  if (!record) {
+    return {
+      ok: false,
+      status: "quality_result_not_found",
+      message: "Quality result was not found."
+    };
+  }
+
+  const oldAiScore = Number(record.aiScore || 0);
+  record.aiScore = score;
+  record.finalScore = Math.min(100, Math.round(((Number(record.objectiveScore) || 0) + score) * 10) / 10);
+  record.totalScore = record.finalScore;
+  record.status = "manual_adjusted";
+  record.manualAdjustReason = reason;
+  appendOperationLogInMock({
+    actor: currentUser,
+    action: "quality_score_manual_adjusted",
+    targetType: "quality_score",
+    targetId: record.id,
+    summary: `人工修正 AI 分：${oldAiScore} -> ${score}`,
+    metadata: {
+      conversationId: record.conversationId,
+      oldAiScore,
+      newAiScore: score,
+      finalScore: record.finalScore,
+      reason
+    }
+  });
+  return { ok: true, status: "manual_adjusted", result: record };
 }
 
 export async function evaluateQualityWithAi(payload = {}) {
   return runAiQualityEvaluation(payload);
 }
 
-export async function getCustomerProfiles() {
-  return fromPostgres(() => getCustomerProfilesFromPostgres(), () => customerProfiles);
+export async function getCustomerProfiles(currentUser = null) {
+  return fromPostgres(() => getCustomerProfilesFromPostgres(currentUser), () => getSelfScopedMockRecords(customerProfiles, currentUser));
 }
 
 export async function getPermissionModel() {
-  return fromPostgres(() => getPermissionModelFromPostgres(), () => permissionModel);
+  return fromPostgres(() => getPermissionModelFromPostgres(), () => getPermissionModelFromMock());
 }
 
-export async function createAccountRequest(payload = {}) {
-  return fromPostgres(() => createAccountRequestInPostgres(payload), () => createAccountRequestInMock(payload));
+export async function getAccountRequests() {
+  return fromPostgres(() => getAccountRequestsFromPostgres(), () => accountRequests);
 }
 
-function createAccountRequestInMock(payload = {}) {
+export async function createAccountRequest(payload = {}, currentUser = null) {
+  return fromPostgres(() => createAccountRequestInPostgres(payload, currentUser), () => createAccountRequestInMock(payload, currentUser));
+}
+
+export async function approveAccountRequest(payload = {}, currentUser = null) {
+  return fromPostgres(
+    () => approveAccountRequestInPostgres(payload, currentUser),
+    () => approveAccountRequestInMock(payload, currentUser)
+  );
+}
+
+export async function rejectAccountRequest(payload = {}, currentUser = null) {
+  return fromPostgres(
+    () => rejectAccountRequestInPostgres(payload, currentUser),
+    () => rejectAccountRequestInMock(payload, currentUser)
+  );
+}
+
+export async function getOperationLogs(limit = 30) {
+  return fromPostgres(() => getOperationLogsFromPostgres(limit), () => operationLogs.slice(0, Number(limit) || 30));
+}
+
+export async function updateAccountPermission(payload = {}, currentUser = null) {
+  return fromPostgres(
+    () => updateAccountPermissionInPostgres(payload, currentUser),
+    () => updateAccountPermissionInMock(payload, currentUser)
+  );
+}
+
+function getPermissionModelFromMock() {
+  const counts = users.reduce((acc, user) => {
+    acc.set(user.role, (acc.get(user.role) || 0) + 1);
+    return acc;
+  }, new Map());
+
+  return {
+    ...permissionModel,
+    roles: permissionModel.roles.map((role) => ({
+      ...role,
+      userCount: counts.get(role.key) || 0
+    })),
+    accounts: users.map(({ passwordHash, ...user }) => user)
+  };
+}
+
+function updateAccountPermissionInMock(payload = {}, currentUser = null) {
+  const userId = String(payload.user_id || payload.userId || payload.id || "").trim();
+  const role = String(payload.role || payload.role_key || payload.roleKey || "").trim();
+  const dataScope = String(payload.data_scope || payload.dataScope || "").trim();
+
+  if (!userId || !role || !dataScope) {
+    return {
+      ok: false,
+      status: "missing_required_fields",
+      message: "缺少账号、角色或数据范围。"
+    };
+  }
+
+  if (currentUser?.id === userId) {
+    return {
+      ok: false,
+      status: "self_permission_change_forbidden",
+      message: "不能修改当前登录账号的权限，避免误关管理员入口。"
+    };
+  }
+
+  if (!permissionModel.roles.some((item) => item.key === role)) {
+    return {
+      ok: false,
+      status: "role_not_found",
+      message: "未找到要下放的角色。"
+    };
+  }
+
+  if (!["all", "department", "self"].includes(dataScope)) {
+    return {
+      ok: false,
+      status: "invalid_data_scope",
+      message: "数据范围只能是 all、department 或 self。"
+    };
+  }
+
+  const user = users.find((item) => item.id === userId);
+  if (!user) {
+    return {
+      ok: false,
+      status: "account_not_found",
+      message: "未找到可调整权限的账号。"
+    };
+  }
+
+  user.role = role;
+  user.dataScope = dataScope;
+  user.permissions = permissionsForRole(role);
+
+  appendOperationLogInMock({
+    actor: currentUser,
+    action: "permission_updated",
+    targetType: "app_user",
+    targetId: userId,
+    summary: `${user.name} 权限已下放为 ${role} / ${dataScope}`,
+    metadata: { role, dataScope }
+  });
+
+  const { passwordHash: _, ...account } = user;
+  return {
+    ok: true,
+    status: "permission_updated",
+    message: "账号权限已下放并保存。",
+    account,
+    persistence: "mock_memory_only"
+  };
+}
+
+function permissionsForRole(role) {
+  if (role === "super_admin") return ["*"];
+
+  const permissionsByRole = {
+    quality_manager: ["message:view", "identity:review", "quality:review", "quality:edit", "customer:view", "bi:view"],
+    quality_user: ["message:view", "identity:review", "quality:review", "quality:edit", "customer:view", "bi:view"],
+    service_user: ["message:view", "quality:self", "customer:self"]
+  };
+
+  return permissionsByRole[role] || [];
+}
+
+function createAccountRequestInMock(payload = {}, currentUser = null) {
+  const name = String(payload.name || "").trim();
+  const username = String(payload.username || "").trim();
+  const department = String(payload.department || "").trim();
+  const role = String(payload.role || payload.role_key || payload.roleKey || "service_user").trim();
+  const dataScope = String(payload.dataScope || payload.data_scope || "self").trim();
+  const note = String(payload.note || "").trim();
+
+  if (!name || !username || !department) {
+    return {
+      ok: false,
+      status: "missing_required_fields",
+      message: "请填写姓名、登录账号和所属部门。"
+    };
+  }
+
+  if (!permissionModel.roles.some((item) => item.key === role)) {
+    return {
+      ok: false,
+      status: "role_not_found",
+      message: "未找到要开通的角色。"
+    };
+  }
+
+  if (users.some((item) => item.username === username)) {
+    return {
+      ok: false,
+      status: "username_exists",
+      message: "登录账号已存在，请换一个账号名。"
+    };
+  }
+
   const record = {
     id: `account_request_${Date.now()}`,
-    name: String(payload.name || "").trim(),
-    username: String(payload.username || "").trim(),
-    department: String(payload.department || "").trim(),
-    role: payload.role || "service_user",
-    dataScope: payload.dataScope || "self",
-    note: payload.note || "",
-    status: "pending_cloud_database_write",
+    name,
+    username,
+    department,
+    role,
+    dataScope,
+    note,
+    status: "pending",
     createdAt: new Date().toISOString()
   };
 
   accountRequests.unshift(record);
+  appendOperationLogInMock({
+    actor: currentUser,
+    action: "account_request_created",
+    targetType: "account_request",
+    targetId: record.id,
+    summary: `${name} 的账号开通申请已创建`,
+    metadata: { username, role, dataScope }
+  });
 
   return {
     ok: true,
-    message: "账号申请已接收，等待写入云数据库",
+    message: "账号申请已接收",
     record,
     persistence: "mock_memory_only"
   };
+}
+
+async function approveAccountRequestInMock(payload = {}, currentUser = null) {
+  const requestId = String(payload.request_id || payload.requestId || payload.id || "").trim();
+  const request = accountRequests.find((item) => item.id === requestId);
+  if (!request || request.status !== "pending") {
+    return {
+      ok: false,
+      status: "request_not_found_or_handled",
+      message: "未找到待处理的账号申请。"
+    };
+  }
+
+  if (users.some((item) => item.username === request.username)) {
+    return {
+      ok: false,
+      status: "username_exists",
+      message: "登录账号已存在，无法重复开通。"
+    };
+  }
+
+  const initialPassword = normalizeInitialPassword(payload.initial_password || payload.initialPassword) || generateTemporaryPassword();
+  const user = {
+    id: `u_${Date.now()}`,
+    username: request.username,
+    passwordHash: await hashPassword(initialPassword),
+    name: request.name,
+    role: request.role,
+    department: request.department,
+    dataScope: request.dataScope,
+    permissions: permissionsForRole(request.role)
+  };
+  users.push(user);
+
+  request.status = "approved";
+  request.handledBy = currentUser?.id || "";
+  request.handledByName = currentUser?.name || "";
+  request.handledAt = new Date().toISOString();
+
+  appendOperationLogInMock({
+    actor: currentUser,
+    action: "account_request_approved",
+    targetType: "account_request",
+    targetId: requestId,
+    summary: `${request.name} 的账号已审批开通`,
+    metadata: { userId: user.id, username: user.username, role: user.role, dataScope: user.dataScope }
+  });
+
+  const { passwordHash: _, ...account } = user;
+  return {
+    ok: true,
+    status: "approved",
+    message: "账号已审批开通。",
+    account,
+    request,
+    initialPassword,
+    persistence: "mock_memory_only"
+  };
+}
+
+function rejectAccountRequestInMock(payload = {}, currentUser = null) {
+  const requestId = String(payload.request_id || payload.requestId || payload.id || "").trim();
+  const request = accountRequests.find((item) => item.id === requestId);
+  if (!request || request.status !== "pending") {
+    return {
+      ok: false,
+      status: "request_not_found_or_handled",
+      message: "未找到待处理的账号申请。"
+    };
+  }
+
+  request.status = "rejected";
+  request.handledBy = currentUser?.id || "";
+  request.handledByName = currentUser?.name || "";
+  request.handledAt = new Date().toISOString();
+
+  appendOperationLogInMock({
+    actor: currentUser,
+    action: "account_request_rejected",
+    targetType: "account_request",
+    targetId: requestId,
+    summary: `${request.name} 的账号申请已拒绝`,
+    metadata: { reason: payload.reason || "" }
+  });
+
+  return {
+    ok: true,
+    status: "rejected",
+    message: "账号申请已拒绝。",
+    request,
+    persistence: "mock_memory_only"
+  };
+}
+
+function appendOperationLogInMock({ actor = null, action, targetType, targetId = "", summary, metadata = {} } = {}) {
+  if (!action || !targetType || !summary) return;
+  operationLogs.unshift({
+    id: `op_${Date.now()}_${operationLogs.length}`,
+    actorUserId: actor?.id || "",
+    actorName: actor?.name || actor?.username || "",
+    action,
+    targetType,
+    targetId,
+    summary,
+    metadata,
+    createdAt: new Date().toISOString()
+  });
+}
+
+function normalizeInitialPassword(value) {
+  const password = String(value || "").trim();
+  return password.length >= 8 ? password : "";
+}
+
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let password = "Qi";
+  for (let i = 0; i < 10; i += 1) {
+    password += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `${password}!`;
 }
 
 export async function getRuleConfig() {
@@ -235,6 +619,66 @@ export async function importMessages(payload = {}) {
   );
 }
 
+export async function updateMessageMediaEvidence(payload = {}, currentUser = null) {
+  return fromPostgres(
+    () => updateMessageMediaEvidenceInPostgres(payload, currentUser),
+    () => updateMessageMediaEvidenceInMock(payload, currentUser)
+  );
+}
+
+function updateMessageMediaEvidenceInMock(payload = {}, currentUser = null) {
+  const messageId = String(payload.message_id || payload.messageId || payload.id || "").trim();
+  const message = messages.find((item) => item.id === messageId);
+  if (!message) {
+    return {
+      ok: false,
+      status: "message_not_found",
+      message: "未找到可更新的消息"
+    };
+  }
+
+  const fields = {
+    ocrText: payload.ocr_text ?? payload.ocrText,
+    transcriptText: payload.transcript_text ?? payload.transcriptText,
+    mediaDescription: payload.media_description ?? payload.mediaDescription,
+    imageDescription: payload.image_description ?? payload.imageDescription
+  };
+
+  let updated = 0;
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null) continue;
+    message[key] = String(value);
+    updated += 1;
+  }
+
+  message.mediaMetadata = {
+    ...(message.mediaMetadata || {}),
+    parse_status: payload.parse_status || payload.parseStatus || "processed",
+    analysis_text_source: payload.analysis_text_source || payload.analysisTextSource || "manual_or_external_processor",
+    updated_by: currentUser?.id || "",
+    updated_at: new Date().toISOString()
+  };
+
+  return {
+    ok: updated > 0,
+    status: updated > 0 ? "updated" : "no_fields",
+    messageId,
+    updatedFields: updated
+  };
+}
+
+function normalizeManualAiScore(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 60) return null;
+  return Math.round(number * 10) / 10;
+}
+
+function normalizeManualAdjustReason(value) {
+  const reason = String(value || "").trim();
+  if (reason.length < 4) return "";
+  return reason.slice(0, 1000);
+}
+
 async function fromPostgres(dbCall, fallbackCall) {
   if (!isPostgresConfigured()) {
     return fallbackCall();
@@ -243,7 +687,17 @@ async function fromPostgres(dbCall, fallbackCall) {
   try {
     return await dbCall();
   } catch (error) {
-    console.warn("[database] PostgreSQL fallback to mock:", error instanceof Error ? error.message : String(error));
-    return fallbackCall();
+    const message = error instanceof Error ? error.message : String(error);
+    if (isMockFallbackAllowed()) {
+      console.warn("[database] PostgreSQL fallback to mock:", message);
+      return fallbackCall();
+    }
+
+    throw new Error(`PostgreSQL request failed and mock fallback is disabled: ${message}`);
   }
+}
+
+function isMockFallbackAllowed() {
+  const env = globalThis.process?.env || {};
+  return env.ALLOW_MOCK_FALLBACK === "true";
 }

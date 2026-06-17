@@ -185,10 +185,17 @@ create table if not exists ai_quality_result (
   provider text not null default 'deepseek',
   model text not null,
   prompt_profile text not null,
+  prompt_document text,
+  prompt_version text not null default 'v1',
   status text not null default 'completed',
+  input_json jsonb not null default '{}'::jsonb,
   result_json jsonb not null,
   usage_json jsonb not null default '{}'::jsonb,
+  validation_status text not null default 'not_checked',
+  validation_errors jsonb not null default '[]'::jsonb,
+  error_message text,
   created_by text references app_user(id) on delete set null,
+  completed_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -207,6 +214,7 @@ create table if not exists quality_score (
   risks jsonb not null default '[]'::jsonb,
   ai_result_id text references ai_quality_result(id) on delete set null,
   scorer_user_id text references app_user(id) on delete set null,
+  manual_adjust_reason text,
   reviewed_by text references app_user(id) on delete set null,
   reviewed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -243,3 +251,19 @@ create table if not exists account_request (
   handled_by text references app_user(id) on delete set null,
   handled_at timestamptz
 );
+
+create table if not exists operation_log (
+  id text primary key default 'op_' || replace(gen_random_uuid()::text, '-', ''),
+  actor_user_id text references app_user(id) on delete set null,
+  actor_name text,
+  action text not null,
+  target_type text not null,
+  target_id text,
+  summary text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_operation_log_created_at on operation_log(created_at desc);
+create index if not exists idx_operation_log_actor on operation_log(actor_user_id, created_at desc);
+create index if not exists idx_operation_log_target on operation_log(target_type, target_id);

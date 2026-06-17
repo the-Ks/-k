@@ -44,9 +44,9 @@ where r.key = 'service_user'
 on conflict do nothing;
 
 insert into app_user (id, username, password_hash, name, department, data_scope, status) values
-  ('u_admin', 'admin', 'admin123', '超级管理员', '管理中心', 'all', 'active'),
-  ('u_qc_01', 'qc', '123456', '质检员A', '质检组', 'department', 'active'),
-  ('u_service_01', 'service', '123456', '客服小林', '客服一组', 'self', 'active')
+  ('u_admin', 'admin', 'pbkdf2_sha256$210000$XVYLS0NRfyZVTajKaLEThg$QgZeGzz7pm2Myx0xBFYkPbf23yP1m6SbkvNplKJ8Nn0', '超级管理员', '管理中心', 'all', 'active'),
+  ('u_qc_01', 'qc', 'pbkdf2_sha256$210000$cBGUGpjt2rz2GkO4Ts4b3g$xQOjr1G2Rdf06adxAc_nPYqhQP5WlCOzUcGueHsc_F8', '质检员A', '质检组', 'department', 'active'),
+  ('u_service_01', 'service', 'pbkdf2_sha256$210000$I_myQG3ny0jQiMcRXsR56A$hFLJpTV46ccZCjUWOFtAMIzidRJfsmrchETzH0x4-gM', '客服小林', '客服一组', 'self', 'active')
 on conflict (username) do update set
   password_hash = excluded.password_hash,
   name = excluded.name,
@@ -225,7 +225,7 @@ on conflict do nothing;
 insert into quality_score (
   id, conversation_id, objective_score, ai_score, final_score, status, objective_metrics, dimensions, risks, scorer_user_id
 ) values (
-  'qa_001', 'conv_001', 37, 51, 88, '待人工复核',
+  'qa_001', 'conv_001', 37, 51, 88, 'ai_scored',
   '{"first_response_seconds": 42, "longest_wait_seconds": 66, "response_score": 19, "timeout_count": 0}'::jsonb,
   '[
     {"name":"响应速度","score":19,"max":20,"reason":"客户首次提问后 42 秒内回复"},

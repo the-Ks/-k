@@ -5,7 +5,12 @@
   "scripts": {
     "backend": "node backend/src/server.js",
     "frontend": "node frontend/server.js",
+    "test": "node --test tests/*.test.mjs",
+    "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
+    "start:dev:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1 -Restart",
     "data:import-demo": "node scripts/import-fixture.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:migrate:seed": "node scripts/db-migrate.mjs --seed",
     "db:init": "powershell -ExecutionPolicy Bypass -File scripts/db-init.ps1",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/db-start.ps1",
     "db:stop": "powershell -ExecutionPolicy Bypass -File scripts/db-stop.ps1",

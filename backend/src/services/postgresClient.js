@@ -12,6 +12,7 @@ loadLocalEnv();
 
 export function isPostgresConfigured() {
   const env = globalThis.process?.env || {};
+  if (env.DATA_SOURCE === "mock") return false;
   return env.DATA_SOURCE === "postgres" || Boolean(env.DATABASE_URL);
 }
 
