@@ -21,6 +21,13 @@ export async function query(text, params = []) {
   return pool.query(text, params);
 }
 
+export async function closePostgresPool() {
+  if (!poolPromise) return;
+  const pool = await poolPromise;
+  poolPromise = undefined;
+  await pool.end();
+}
+
 export async function getDatabaseStatus() {
   if (!isPostgresConfigured()) {
     return {

@@ -22,6 +22,7 @@ import {
   getCustomerProfilesFromPostgres,
   getDemoUsersFromPostgres,
   getIdentityReviewTasksFromPostgres,
+  getImportBatchesFromPostgres,
   getBiDashboardFromPostgres,
   getMessagesFromPostgres,
   getPermissionModelFromPostgres,
@@ -588,6 +589,66 @@ export async function fetchMessagesFromDatabase() {
 
 export async function getDatabaseConnectionStatus() {
   return getDatabaseStatus();
+}
+
+export function getImportFieldGuide() {
+  return {
+    ok: true,
+    version: "2026-06-17",
+    description: "淘宝/微信聊天记录导入字段字典。字段支持 snake_case 与常见 camelCase/别名，后端会统一标准化。",
+    required: [
+      { field: "source_system", aliases: ["sourceSystem"], type: "enum", values: ["taobao", "wechat"], description: "消息来源系统。" },
+      { field: "messages", type: "array", description: "待导入消息数组，至少 1 条。" },
+      { field: "source_message_id", aliases: ["sourceMessageId", "message_id", "messageId", "id"], type: "string", description: "来源系统消息 ID，用于幂等去重。" },
+      { field: "source_chat_id", aliases: ["sourceChatId", "chat_id", "chatId", "group_id", "session_id"], type: "string", description: "来源会话、群或咨询窗口 ID。" },
+      { field: "source_sender_id", aliases: ["sourceSenderId", "sender_id", "senderId", "member_id", "user_id"], type: "string", description: "来源发送人 ID。" },
+      { field: "time", aliases: ["sent_at", "sentAt", "send_time", "sendTime", "created_at"], type: "datetime", description: "消息发送时间，建议 ISO 8601 或 yyyy-MM-dd HH:mm:ss。" },
+      { field: "role", aliases: ["role_raw", "roleRaw", "sender_role"], type: "enum/text", values: ["customer", "service", "sales", "after_sales", "bot", "system", "unknown"], description: "原始发送人角色；中文客户/客服/售后等会自动映射。" }
+    ],
+    optional: [
+      { field: "sender_name", aliases: ["senderName", "speaker", "nickname", "display_name", "name"], type: "string", description: "原始昵称或展示名。" },
+      { field: "content", aliases: ["text", "message", "body"], type: "string", description: "文本消息内容；非文本消息可为空，但必须提供媒体证据字段。" },
+      { field: "message_type", aliases: ["messageType", "type"], type: "enum", values: ["text", "image", "voice", "video", "file", "link", "mini_program", "product_card", "emoji", "location", "mixed"], description: "消息类型；缺省时会基于内容和媒体字段推断。" },
+      { field: "media_url", aliases: ["mediaUrl", "image_url", "file_url", "url"], type: "string", description: "媒体文件或外部资源 URL。" },
+      { field: "media_path", aliases: ["mediaPath", "local_path", "path"], type: "string", description: "本地或对象存储路径。" },
+      { field: "ocr_text", aliases: ["ocrText", "ocr", "recognized_text"], type: "string", description: "图片 OCR 文本证据。" },
+      { field: "transcript_text", aliases: ["transcriptText", "voice_text", "audio_text", "video_text"], type: "string", description: "语音或视频转写文本证据。" },
+      { field: "media_description", aliases: ["mediaDescription", "image_description", "video_description", "file_summary", "caption", "summary"], type: "string", description: "图片、视频、文件或链接摘要。" },
+      { field: "attachments", aliases: ["media"], type: "array", description: "多附件消息，元素字段与媒体字段一致。" },
+      { field: "structured_content", aliases: ["structuredContent", "card", "mini_program", "product_card", "location"], type: "object", description: "小程序、商品卡片、位置等结构化消息。" }
+    ],
+    template: {
+      source_system: "taobao",
+      mode: "incremental",
+      file_name: "taobao-chat-2026-06-17.json",
+      company_domain: "flower_gardening",
+      imported_by: "admin",
+      messages: [
+        {
+          source_message_id: "tb_msg_001",
+          source_chat_id: "tb_chat_1001",
+          source_sender_id: "tb_customer_7788",
+          sender_name: "清风",
+          time: "2026-06-15 09:12:20",
+          role: "customer",
+          content: "这个产品一般多久能看到效果？",
+          message_type: "text"
+        }
+      ]
+    }
+  };
+}
+
+export async function getImportBatches(searchParams = new URLSearchParams()) {
+  return fromPostgres(
+    () => getImportBatchesFromPostgres(searchParams),
+    () => ({
+      ok: true,
+      mode: "mock",
+      batches: [],
+      message: "PostgreSQL 未启用，mock 模式没有持久化导入批次。"
+    })
+  );
 }
 
 export async function importMessages(payload = {}) {

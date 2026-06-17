@@ -17,6 +17,8 @@ import {
   getRuleConfig,
   getSyncStatus,
   getDatabaseConnectionStatus,
+  getImportBatches,
+  getImportFieldGuide,
   importMessages,
   login,
   approveAccountRequest,
@@ -37,6 +39,8 @@ const accessRules = [
   { method: "POST", path: "/api/overview", roles: ALL_ROLES },
   { method: "GET", path: "/api/sync/status", roles: ["super_admin"] },
   { method: "GET", path: "/api/messages", roles: ALL_ROLES },
+  { method: "GET", path: "/api/messages/import/schema", roles: ["super_admin"] },
+  { method: "GET", path: "/api/messages/import-batches", roles: ["super_admin"] },
   { method: "POST", path: "/api/messages/import", roles: ["super_admin"] },
   { method: "POST", path: "/api/messages/media-evidence", roles: QUALITY_ROLES },
   { method: "GET", path: "/api/identity/review", roles: QUALITY_ROLES },
@@ -128,7 +132,7 @@ function authorizeRequest(req, path) {
   return { ok: true, user: auth.user };
 }
 
-const server = http.createServer(async (req, res) => {
+export const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     return sendJson(res, 204, {});
   }
@@ -185,6 +189,14 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && path === "/api/messages") {
       return sendJson(res, 200, await getMessages(reqUrl.searchParams, currentUser));
+    }
+
+    if (req.method === "GET" && path === "/api/messages/import/schema") {
+      return sendJson(res, 200, getImportFieldGuide());
+    }
+
+    if (req.method === "GET" && path === "/api/messages/import-batches") {
+      return sendJson(res, 200, await getImportBatches(reqUrl.searchParams));
     }
 
     if (req.method === "POST" && path === "/api/messages/import") {

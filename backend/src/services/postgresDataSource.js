@@ -1003,6 +1003,39 @@ export async function getSyncStatusFromPostgres() {
   };
 }
 
+export async function getImportBatchesFromPostgres(searchParams = new URLSearchParams()) {
+  const batchId = String(searchParams.get("batch_id") || searchParams.get("batchId") || "").trim();
+  const limit = normalizeLimit(searchParams.get("limit"), 30, 100);
+  const params = [];
+  const where = [];
+  if (batchId) {
+    params.push(batchId);
+    where.push(`id = $${params.length}`);
+  }
+  params.push(limit);
+
+  const result = await query(
+    `
+      select id, source_system, mode, file_name, status, total_count, success_count, failed_count,
+             started_at, finished_at, error_message, metadata
+      from import_batch
+      ${where.length ? `where ${where.join(" and ")}` : ""}
+      order by started_at desc
+      limit $${params.length}
+    `,
+    params
+  );
+
+  const batches = result.rows.map(toImportBatch);
+  return {
+    ok: true,
+    mode: "postgres",
+    batchId: batchId || undefined,
+    batches,
+    detail: batchId ? batches[0] || null : undefined
+  };
+}
+
 export async function getBiDashboardFromPostgres(baseDashboard = {}) {
   const result = await query(
     `
@@ -1107,7 +1140,7 @@ export async function importMessagesInPostgres(payload = {}) {
   }
 
   const sourceSystem = normalized.sourceSystem;
-  const batchId = `batch_${sourceSystem}_${Date.now()}`;
+  const batchId = `batch_${sourceSystem}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
   await query(
     `
       insert into import_batch (id, source_system, mode, file_name, status, total_count, started_at, metadata)
@@ -1250,10 +1283,25 @@ export async function importMessagesInPostgres(payload = {}) {
           success_count = $3,
           failed_count = $4,
           finished_at = now(),
-          error_message = $5
+          error_message = $5,
+          metadata = coalesce(metadata, '{}'::jsonb) || $6::jsonb
       where id = $1
     `,
-    [batchId, failedCount ? "completed_with_errors" : "completed", successCount, failedCount, errors.length ? JSON.stringify(errors.slice(0, 5)) : null]
+    [
+      batchId,
+      failedCount ? "completed_with_errors" : "completed",
+      successCount,
+      failedCount,
+      errors.length ? JSON.stringify(errors.slice(0, 5)) : null,
+      JSON.stringify({
+        import_errors: errors,
+        import_summary: {
+          total_count: normalized.messages.length,
+          success_count: successCount,
+          failed_count: failedCount
+        }
+      })
+    ]
   );
 
   return {
@@ -1353,6 +1401,36 @@ function toSourceStatus(key, name, bySource) {
   };
 }
 
+function toImportBatch(row = {}) {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const errors = Array.isArray(metadata.import_errors) ? metadata.import_errors : parseImportErrors(row.error_message);
+  return {
+    id: row.id,
+    sourceSystem: row.source_system,
+    mode: row.mode,
+    fileName: row.file_name || "",
+    status: row.status,
+    totalCount: Number(row.total_count || 0),
+    successCount: Number(row.success_count || 0),
+    failedCount: Number(row.failed_count || 0),
+    startedAt: formatDateTime(row.started_at),
+    finishedAt: formatDateTime(row.finished_at),
+    errorSummary: row.error_message || "",
+    errors,
+    metadata
+  };
+}
+
+function parseImportErrors(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function toAccountRequest(row = {}) {
   return {
     id: row.id,
@@ -1446,6 +1524,12 @@ function formatDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleDateString("zh-CN");
+}
+
+function normalizeLimit(value, fallback, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.min(Math.round(number), max);
 }
 
 function formatDateKey(value) {

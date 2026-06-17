@@ -6,6 +6,7 @@
     "backend": "node backend/src/server.js",
     "frontend": "node frontend/server.js",
     "test": "node --test tests/*.test.mjs",
+    "test:integration": "node --test tests/*.integration.mjs",
     "start:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "start:dev:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1 -Restart",
     "data:import-demo": "node scripts/import-fixture.mjs",

@@ -18,6 +18,8 @@ backend/src/services/dataSource.js
 | GET/POST | `/api/overview` | 角色工作台概览 |
 | GET | `/api/sync/status` | 数据接入状态 |
 | GET | `/api/messages` | 标准化聊天记录 |
+| GET | `/api/messages/import/schema` | 淘宝/微信导入字段字典、别名和请求模板 |
+| GET | `/api/messages/import-batches` | 导入批次列表；可用 `batch_id` 查看错误明细 |
 | POST | `/api/messages/import` | 批量导入淘宝/微信标准化聊天记录到 PostgreSQL |
 | GET | `/api/identity/review` | 身份复核任务 |
 | GET | `/api/conversations` | 会话链路 |
@@ -31,6 +33,21 @@ backend/src/services/dataSource.js
 | GET | `/api/bi` | BI 看板数据 |
 
 ## 数据接入预期字段
+
+字段字典接口：
+
+```text
+GET /api/messages/import/schema
+```
+
+导入批次与错误明细：
+
+```text
+GET /api/messages/import-batches
+GET /api/messages/import-batches?batch_id=batch_taobao_xxx
+```
+
+批量导入以 `source_system + source_message_id` 幂等去重。重复导入同一来源消息会更新原记录，不会新增重复行。
 
 ## AI 质检请求
 

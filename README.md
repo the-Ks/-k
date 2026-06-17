@@ -31,6 +31,7 @@ npm run frontend
 
 ```bash
 npm run db:migrate:seed
+npm run test:integration
 npm run backend
 npm run frontend
 ```
